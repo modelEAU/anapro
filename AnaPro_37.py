@@ -5,15 +5,22 @@ import re
 import time
 from datetime import datetime as dt
 
+def connect(server, database):
+    try:
+        cnx = pymssql.connect(server=server, database=database)
+        curs = conn.cursor()
+        print("conn ok")
+        return cnx, curs
+    except Exception as e:
+        print("conn error")
+        print(e)
+        return None, None
+
+
 # Connect to the DB
-try:
-    conn = pymssql.connect(server=r'GCI-PR-DATEAU01\DATEAUBASE', database='dateaubase2020')
-    cursor = conn.cursor()
-    print("conn ok")
-except Exception:
-    print("conn error")
-
-
+conn, cursor = connect(r'GCI-PR-DATEAU01\DATEAUBASE', 'dateaubase2020')
+if not conn:
+    break
 # --------------------------------------------------------------------------------------------------
 
 # THIS IS THE BEGIN FOR ANAPRO IN LAVAL
