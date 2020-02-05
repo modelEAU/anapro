@@ -7,6 +7,7 @@ import re
 import numpy as np
 from sqlalchemy import create_engine
 
+
 database_name = 'dateaubase2020'
 local_server = r'GCI-PR-DATEAU01\DATEAUBASE'
 remote_server = '10.10.10.10'
@@ -24,18 +25,13 @@ def connect_local(server, database):
         return None, None
 
 
-def connect_remote(server, database):
-    with open('login.txt') as f:
-        usr = f.readline().strip()
-        pwd = f.readline().strip()
-    username = usr  # input("Enter username")
-    password = pwd  # getpass.getpass(prompt="Enter password")
+def connect_remote(server, database, usr, pwd):
     config = dict(
         server=server,  # change this to your SQL Server hostname or IP address
         port=1433,  # change this to your SQL Server port number [1433 is the default]
         database=database,
-        username=username,
-        password=password)
+        username=usr,
+        password=pwd)
     conn_str = (
         'SERVER={server},{port};'
         + 'DATABASE={database};'
@@ -152,14 +148,22 @@ def send_to_db(df):
     df.to_sql('dbo.value', engine, if_exists='append', index=False, index_label='Value_ID')
     return None
 
-
-#cursor, conn = connect_local(local_server, database_name)
-#if conn:
+# This snippet is needed to run the script on the dateaubase computer
+# cursor, conn = connect_local(local_server, database_name)
+# if conn:
 #    engine = create_engine(f'mssql://{local_server}/{database_name}?trusted_connection=yes')
+# if engine:
+#    print('engine is running')
 
-cursor, conn = connect_remote(remote_server, database_name)
+# This snippet is needed for remote testing only
+
+
+with open('login.txt') as f:
+    username = f.readline().strip()
+    password = f.readline().strip()
+cursor, conn = connect_remote(remote_server, database_name, username, password)
 engine = create_engine(
-    f'mssql+pyodbc://jeandavidt:koopa6425@{remote_server}:1433/{database_name}?driver=ODBC+Driver+13+for+SQL+Server',
+    f'mssql+pyodbc://{username}:{password}@{remote_server}:1433/{database_name}?driver=ODBC+Driver+13+for+SQL+Server',
     fast_executemany=True
 )
 if engine:
