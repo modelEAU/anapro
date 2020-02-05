@@ -1,6 +1,15 @@
 {
     "cSpell.ignoreWords": [
-        "infpc"
+        "astype",
+        "co",
+        "dfinfo",
+        "hinfo",
+        "infpc",
+        "kinfo",
+        "mssql",
+        "ninfo",
+        "no",
+        "p"
     ],
     "python.pythonPath": "C:\\Users\\Jean-David\\Anaconda3\\envs\\pileaute_dash\\python.exe"
 }
