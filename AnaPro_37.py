@@ -183,7 +183,8 @@ def main(engine):
 # ________Main Script_________
 try:
     engine = connect_local(local_server, database_name)
-    print('local connection engine is running')
+    if engine is not None:
+        print('local connection engine is running')
 except Exception:
     print(e)
 
