@@ -1,22 +1,31 @@
 import pandas as pd
 import os
-import pyodbc
+
 import pymssql
+from collections import namedtuple
 from datetime import datetime as dt
 import re
 import numpy as np
 from sqlalchemy import create_engine
 
 
-database_name = 'dateaubase2020'
+database_name = 'dateaubaseSandbox'
 local_server = r'GCI-PR-DATEAU01\DATEAUBASE'
 remote_server = '10.10.10.10'
+
+
+def get_last(db_engine):
+    query = 'SELECT Value_ID, Timestamp FROM dbo.value WHERE Value_ID = (SELECT MAX(Value_ID) FROM dbo.value)'
+    result = db_engine.execute(query)
+    Record = namedtuple('record', result.keys())
+    records = [Record(*r) for r in result.fetchall()]
+    return records[0]
 
 
 def connect_local(server, database):
     try:
         cnx = pymssql.connect(server=server, database=database)
-        curs = conn.cursor()
+        curs = cnx.cursor()
         print("conn ok")
         return cnx, curs
     except Exception as e:
@@ -25,7 +34,7 @@ def connect_local(server, database):
         return None, None
 
 
-def connect_remote(server, database, usr, pwd):
+'''def connect_remote(server, database, usr, pwd):
     config = dict(
         server=server,  # change this to your SQL Server hostname or IP address
         port=1433,  # change this to your SQL Server port number [1433 is the default]
@@ -48,7 +57,7 @@ def connect_remote(server, database, usr, pwd):
     except Exception as e:
         print("remote connection error")
         print(e)
-        return None, None
+        return None, None'''
 
 
 def get_par_files(path):
@@ -68,7 +77,7 @@ def get_par_files(path):
     return index, file_list
 
 
-def read_par(f_name, cursor):
+def read_par(f_name, db_engine):
     # load a file's data into a DataFrame
     df = pd.read_csv(f_name, sep='\t', skiprows=0, encoding='ANSI', header=1)
 
@@ -91,11 +100,10 @@ def read_par(f_name, cursor):
     df['Datetime'] = pd.to_datetime(df['Datetime'], format='%Y.%m.%d  %H:%M:%S').astype(np.int64) // 10 ** 9
 
     # Get the last ID from the database
-    cursor.execute('SELECT Value_ID, Timestamp FROM dbo.value WHERE Value_ID = (SELECT MAX(Value_ID) FROM dbo.value)')
-    last_ID, last_epoch = cursor.fetchone()[0:2]
+    last_ID, last_Timestamp = get_last(engine)
 
     # Remove rows with a timestamp already in the dateaubase
-    time_mask = (df['Datetime'] > last_epoch)
+    time_mask = (df['Datetime'] > last_Timestamp)
     df = df[time_mask]
     if (not len(df)):
         return None
@@ -126,7 +134,8 @@ def read_par(f_name, cursor):
     df.loc[mask, 'Value'] = df['Value'] / 1000
 
     # Add 'Number of experiments column
-    df['Number_of_experiments'] = 1
+    df['Number_of_experiment'] = 1
+    df['Comment_ID'] = np.nan
 
     # Add the lastID value plus increment to the index of the new values
     df.index = df.index + last_ID + 1
@@ -138,14 +147,14 @@ def read_par(f_name, cursor):
     }, inplace=True)
 
     # reorder columns
-    df = df[['Value_ID', 'Timestamp', 'Value', 'Number_of_experiments', 'Metadata_ID']]
+    df = df[['Value_ID', 'Value', 'Number_of_experiment', 'Metadata_ID', 'Comment_ID', 'Timestamp']]
 
     return df
 
 
-def send_to_db(df):
+def send_to_db(df, db_engine):
     # stores df in SQL table dbo.value
-    df.to_sql('dbo.value', engine, if_exists='append', index=False, index_label='Value_ID')
+    df.to_sql('value', con=db_engine, if_exists='append', index=False)
     return None
 
 # This snippet is needed to run the script on the dateaubase computer
@@ -161,7 +170,7 @@ def send_to_db(df):
 with open('login.txt') as f:
     username = f.readline().strip()
     password = f.readline().strip()
-cursor, conn = connect_remote(remote_server, database_name, username, password)
+# cursor, conn = connect_remote(remote_server, database_name, username, password)
 engine = create_engine(
     f'mssql+pyodbc://{username}:{password}@{remote_server}:1433/{database_name}?driver=ODBC+Driver+13+for+SQL+Server',
     fast_executemany=True
@@ -173,12 +182,10 @@ if engine:
 path = "sample_files"
 index, file_list = get_par_files(path)
 
-
-cursor.execute('SELECT Timestamp FROM dbo.value WHERE Value_ID = (SELECT MAX(Value_ID) FROM dbo.value)')
-last_epoch = cursor.fetchone()[0]
+_, last_Timestamp = get_last(engine)
 
 # Convert the Timestamp in DateTime format
-db_last_time = dt.fromtimestamp(last_epoch)
+db_last_time = dt.fromtimestamp(last_Timestamp)
 
 # loop to check all the files for data more recent than the last value in the db
 for idx, file in enumerate(file_list):
@@ -186,7 +193,6 @@ for idx, file in enumerate(file_list):
         first_point_line = f.read().splitlines()[2]
         first_time_string = re.split(r'\t', first_point_line)[0]
         file_first_time = dt.strptime(first_time_string, '%Y.%m.%d  %H:%M:%S')
-
     # if a file is more recent than the last data => change the index to begin the import with the
     # file just before this one
     if file_first_time > db_last_time:
@@ -195,13 +201,12 @@ for idx, file in enumerate(file_list):
 
 new_records = 0
 for file in file_list[index:]:
-    new_data = read_par(file, cursor)
-    # send_to_db(new_data)
-    if new_data:
+    new_data = read_par(file, engine)
+    if new_data is not None:
+        send_to_db(new_data, engine)
         new_records += len(new_data)
 
-print(f" Added {new_records} rows added to {database_name}")
+print(f"Added {new_records} rows to {database_name}")
 
 # Close the connexion to the DB
-conn.close()
 engine.dispose()
