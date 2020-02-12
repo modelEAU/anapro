@@ -7,11 +7,11 @@ import re
 import numpy as np
 from sqlalchemy import create_engine
 
-
+# Setting constants
 database_name = 'dateaubaseSandbox'
 local_server = r'GCI-PR-DATEAU01\DATEAUBASE'
 remote_server = '10.10.10.10'
-path = "sample_files"
+path = "//10.10.10.13/infpc1_2/"
 with open('login.txt') as f:
     username = f.readline().strip()
     password = f.readline().strip()
@@ -19,7 +19,7 @@ with open('login.txt') as f:
 
 def connect_local(server, database):
     try:
-        engine = create_engine(f'mssql://{local_server}/{database_name}?trusted_connection=yes', fast_executemany=True)
+        engine = create_engine(f'mssql+pyodbc://@{server}/{database}?trusted_connection=yes&driver=ODBC+Driver+11+for+SQL+Server')
     except Exception as e:
         print("local connection error")
         print(e)
@@ -182,11 +182,12 @@ def main(engine):
 
 
 # ________Main Script_________
-'''try:
+try:
     engine = connect_local(local_server, database_name)
-    print('local connection engine is running')
+    if engine is not None:
+        print('local connection engine is running')
 except Exception:
-    print(e)'''
+    print(e)
 
 try:
     engine = connect_remote(remote_server, database_name)
