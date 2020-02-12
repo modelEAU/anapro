@@ -95,7 +95,8 @@ def read_par(f_name, db_engine):
         return None
     # Stack the values into unique records
     df.set_index('Datetime', inplace=True)
-    df = pd.DataFrame(df.stack())
+    df2 = pd.DataFrame(df.stack())
+    df = df2
     df.reset_index(inplace=True)
 
     # Rename the columns
@@ -140,7 +141,7 @@ def read_par(f_name, db_engine):
 
 
 def send_to_db(df, db_engine):
-    # stores df in SQL table dbo.value
+    '''stores df in SQL table dbo.value'''
     df.to_sql('value', con=db_engine, if_exists='append', index=False)
     return None
 
@@ -195,5 +196,7 @@ except Exception as e:
 
 try:
     main(engine)
+except Exception as e:
+    print(e)
 finally:
     engine.dispose()
