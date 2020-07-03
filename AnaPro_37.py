@@ -6,35 +6,28 @@ from datetime import datetime as dt
 import re
 import numpy as np
 from sqlalchemy import create_engine
+from urllib import parse
 
 # Setting constants
-database_name = 'dateaubaseSandbox'
-local_server = r'GCI-PR-DATEAU01\DATEAUBASE'
-remote_server = '10.10.10.10'
-path = "//10.10.10.13/infpc1_2/"
+database_name = 'dateaubase2020'
+local_server = r'GCI-PR-DATEAU02\DATEAUBASE'
+remote_server = r'132.203.190.77\DATEAUBASE'
+path = "//10.10.11.13/infpc1_2/"
 with open('login.txt') as f:
     username = f.readline().strip()
     password = f.readline().strip()
 
 
 def connect_local(server, database):
-    try:
-        engine = create_engine(f'mssql+pyodbc://@{server}/{database}?trusted_connection=yes&driver=ODBC+Driver+11+for+SQL+Server')
-    except Exception as e:
-        print("local connection error")
-        print(e)
-        return None
+    engine = create_engine(f'mssql://{local_server}/{database}?driver=SQL+Server?trusted_connection=yes', connect_args={'connect_timeout': 2}, fast_executemany=True)
     return engine
 
 
-def connect_remote(server, database):
-    try:
-        engine = create_engine(f'mssql+pyodbc://jeandavidt:koopa6425@{remote_server}:1433/{database_name}?driver=ODBC+Driver+13+for+SQL+Server', fast_executemany=True)
-        print('remote connection ok')
-    except Exception as e:
-        print("remote connection error")
-        print(e)
-        return None
+def connect_remote(server, database, login_file):
+    with open(login_file) as f:
+        username = f.readline().strip()
+        password = parse.quote_plus(f.readline().strip())
+    engine = create_engine(f'mssql+pyodbc://{username}:{password}@{server}/{database}?driver=ODBC+Driver+17+for+SQL+Server', connect_args={'connect_timeout': 2}, fast_executemany=True)
     return engine
 
 
@@ -45,6 +38,13 @@ def get_last(db_engine):
     records = [Record(*r) for r in result.fetchall()]
     return records[0]
 
+def engine_runs(engine):
+    try:
+        _ = get_last(engine)
+    except Exception:
+        return False
+    else:
+        return True
 
 def get_par_files(path):
     full_path = os.path.join(os.getcwd(), path)
@@ -182,18 +182,16 @@ def main(engine):
 
 
 # ________Main Script_________
-try:
-    engine = connect_local(local_server, database_name)
-    if engine is not None:
-        print('local connection engine is running')
-except Exception:
-    print(e)
-
-try:
-    engine = connect_remote(remote_server, database_name)
-    print('remote connection engine is running')
-except Exception as e:
-    print(e)
+engine = connect_local(local_server, database_name)
+if engine_runs(engine):
+    print('local connection engine is running')
+else:
+    print('local connection engine failed to connect. Trying remote')
+    engine = connect_remote(remote_server, database_name, 'login.txt')
+    if engine_runs(engine):
+        print('remote connection engine is running')
+    else:
+        print('Remote connection engine failed to connect. Quitting.')
 
 try:
     main(engine)
